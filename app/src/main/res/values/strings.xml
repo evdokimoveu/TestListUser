@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">TestListUser</string>
+    <string name="user_item_format">%1$s %2$s</string>
+    <string name="data_loading">Please, white to data loading</string>
+    <string name="text_dialog_message">Change number of max elements.</string>
+</resources>
