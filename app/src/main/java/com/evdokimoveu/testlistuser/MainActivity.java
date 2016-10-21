@@ -28,10 +28,10 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
 
     private final String APP_PREFERENCES = "max_elements_preference";
     private final String CURRENT_MAX_ELEMENTS = "current_max_elements";
-    private final int LOAD_FACTOR = 10;
 
     private int maxElementsInMemory;
     private ListView userListView;
+    private SQLiteDatabase sqLiteDatabase;
     private Cursor cursor;
     private ArrayList<User> users;
     private boolean isLoading;
@@ -39,11 +39,15 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     private int currentLastPosition = 0;
     private int endDataBasePosition = 0;
     private SharedPreferences preferences;
+    private SharedPreferences.Editor editor;
+    private UserAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        users = new ArrayList<>();
 
         preferences = getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE);
         if(preferences.contains(CURRENT_MAX_ELEMENTS)) {
@@ -58,29 +62,19 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.attachToListView(userListView);
 
-        UserSQLiteHelper userSQLiteHelper = new UserSQLiteHelper(this);
-        SQLiteDatabase sqLiteDatabase = userSQLiteHelper.getReadableDatabase();
+        openDB();
 
-        cursor = sqLiteDatabase.query(
-                UserSQLiteHelper.TABLE_USER,
-                new String[]{
-                        UserSQLiteHelper.FIELD_USER_ID,
-                        UserSQLiteHelper.FIELD_USER_FIRST_NAME,
-                        UserSQLiteHelper.FIELD_USER_LAST_NAME
-                },
-        null, null, null, null, null);
-
-        users = new ArrayList<>();
-        for(int i = 0; i < maxElementsInMemory; i++){
-            cursor.moveToNext();
-            users.add(getUser());
+        try{
+            createUserList();
+        } finally {
+            closeDB();
         }
 
         currentFirstPosition = 0;
         currentLastPosition = maxElementsInMemory;
         endDataBasePosition = cursor.getCount();
 
-        UserAdapter adapter = new UserAdapter(users, this);
+        adapter = new UserAdapter(users, this);
         userListView.setAdapter(adapter);
         userListView.setOnScrollListener(this);
     }
@@ -89,14 +83,7 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     protected void onDestroy() {
         super.onDestroy();
         cursor.close();
-    }
-
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putInt(CURRENT_MAX_ELEMENTS, maxElementsInMemory);
-        editor.apply();
+        sqLiteDatabase.close();
     }
 
     @Override
@@ -110,12 +97,14 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
         if (visibleItemCount + firstVisibleItem >= totalItemCount
                 && currentLastPosition < endDataBasePosition
                 && !isLoading) {
+
             isLoading = true;
             loadNextUsers();
         }
-        if(firstVisibleItem == 1
-                && !isLoading
-                && currentFirstPosition > 0){
+        if(firstVisibleItem == 0
+                && currentFirstPosition > 0
+                && !isLoading){
+
             isLoading = true;
             loadPreviewsUsers();
         }
@@ -125,40 +114,86 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
      * If scrolling up
      */
     private void loadNextUsers(){
-        int countNewUser = maxElementsInMemory / LOAD_FACTOR;
+        int countNewUser = 1;
         int i = 0;
-        cursor.moveToPosition(currentLastPosition);
-        while(cursor.moveToNext() && i < countNewUser){
-            if(users.size() != 0){
-                users.remove(0);
+        openDB();
+        try{
+            cursor.moveToPosition(currentLastPosition);
+            while(cursor.moveToNext() && i < countNewUser){
+
+                if(users.size() != 0){
+                    users.remove(0);
+                }
+                users.add(getUser());
+                currentFirstPosition++;
+                currentLastPosition++;
+                i++;
             }
-            users.add(getUser());
-            currentFirstPosition++;
-            currentLastPosition++;
-            i++;
+            isLoading = false;
+            adapter.setItemList(users);
+            adapter.notifyDataSetChanged();
+        }finally {
+            closeDB();
         }
-        isLoading = false;
-        ((BaseAdapter) userListView.getAdapter()).notifyDataSetChanged();
     }
 
     /**
      * If scrolling down
      */
     private void loadPreviewsUsers(){
-        int countNewUser = maxElementsInMemory / LOAD_FACTOR;
+        int countNewUser = 1;
         int i = 0;
-        cursor.moveToPosition(currentFirstPosition);
-        while(cursor.moveToPrevious() && i < countNewUser){
-            if(users.size() != 0){
-                users.remove(maxElementsInMemory - 1);
+        openDB();
+        try{
+            cursor.moveToPosition(currentFirstPosition);
+            while(cursor.moveToPrevious() && i < countNewUser){
+
+                if(users.size() != 0){
+                    users.remove(maxElementsInMemory - 1);
+                }
+                users.add(0, getUser());
+                currentFirstPosition--;
+                currentLastPosition--;
+                i++;
             }
-            users.add(0, getUser());
-            currentFirstPosition--;
-            currentLastPosition--;
-            i++;
+            isLoading = false;
+            adapter.setItemList(users);
+            adapter.notifyDataSetChanged();
+        } finally {
+            closeDB();
         }
-        isLoading = false;
-        ((BaseAdapter) userListView.getAdapter()).notifyDataSetChanged();
+    }
+
+    private void openDB(){
+        UserSQLiteHelper userSQLiteHelper = new UserSQLiteHelper(this);
+        sqLiteDatabase = userSQLiteHelper.getReadableDatabase();
+
+        cursor = sqLiteDatabase.query(
+                UserSQLiteHelper.TABLE_USER,
+                new String[]{
+                        UserSQLiteHelper.FIELD_USER_ID,
+                        UserSQLiteHelper.FIELD_USER_FIRST_NAME,
+                        UserSQLiteHelper.FIELD_USER_LAST_NAME
+                },
+                null, null, null, null, null);
+    }
+
+    private void closeDB(){
+        cursor.close();
+        sqLiteDatabase.close();
+    }
+
+    private void createUserList(){
+        users.clear();
+        openDB();
+        try{
+            for(int i = 0; i < maxElementsInMemory; i++){
+                cursor.moveToNext();
+                users.add(getUser());
+            }
+        }finally {
+            closeDB();
+        }
     }
 
     private User getUser(){
@@ -177,6 +212,8 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
         alertDialogBuilder.setView(dialogView);
 
         final EditText maxElementsInput = (EditText) dialogView.findViewById(R.id.edit_dialog_massage);
+        maxElementsInput.setText(String.valueOf(maxElementsInMemory));
+        maxElementsInput.selectAll();
         alertDialogBuilder
                 .setCancelable(false)
                 .setPositiveButton("OK", new DialogInterface.OnClickListener(){
@@ -186,9 +223,16 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
                         if(!TextUtils.isEmpty(inputText)){
                             try{
                                 maxElementsInMemory = Integer.valueOf(inputText);
-                                ((BaseAdapter) userListView.getAdapter()).notifyDataSetChanged();
+                                createUserList();
+
+                                editor = preferences.edit();
+                                editor.putInt(CURRENT_MAX_ELEMENTS, maxElementsInMemory);
+                                editor.apply();
+
+                                adapter = new UserAdapter(users, MainActivity.this);
+                                userListView.setAdapter(adapter);
                             } catch (NumberFormatException ex){
-                                Log.e("", ex.getMessage());
+                                Log.e("TestListUser", ex.getMessage());
                             }
                         }
                     }

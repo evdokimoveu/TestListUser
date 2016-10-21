@@ -38,5 +38,6 @@ public class ScreenActivity extends AppCompatActivity {
         sqLiteDatabase.close();
         Intent intent = new Intent(this, MainActivity.class);
         startActivity(intent);
+        finish();
     }
 }

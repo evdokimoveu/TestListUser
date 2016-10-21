@@ -25,6 +25,10 @@ public class UserAdapter extends BaseAdapter {
         this.layoutInflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
     }
 
+    public void setItemList(ArrayList<User> users){
+        this.users = users;
+    }
+
     @Override
     public int getCount() {
         return users.size();
