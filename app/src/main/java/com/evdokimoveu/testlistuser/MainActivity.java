@@ -1,6 +1,8 @@
 package com.evdokimoveu.testlistuser;
 
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -24,9 +26,11 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements AbsListView.OnScrollListener {
 
-    private int DEFAULT_MAX_ELEMENTS_IN_MEMORY = 50;
+    private final String APP_PREFERENCES = "max_elements_preference";
+    private final String CURRENT_MAX_ELEMENTS = "current_max_elements";
     private final int LOAD_FACTOR = 10;
 
+    private int maxElementsInMemory;
     private ListView userListView;
     private Cursor cursor;
     private ArrayList<User> users;
@@ -34,11 +38,21 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     private int currentFirstPosition = 0;
     private int currentLastPosition = 0;
     private int endDataBasePosition = 0;
+    private SharedPreferences preferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        preferences = getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE);
+        if(preferences.contains(CURRENT_MAX_ELEMENTS)) {
+            maxElementsInMemory = preferences.getInt(CURRENT_MAX_ELEMENTS, 50);
+        }
+        else{
+            maxElementsInMemory = 50;
+        }
+
         userListView = (ListView) findViewById(R.id.user_list);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
@@ -57,13 +71,13 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
         null, null, null, null, null);
 
         users = new ArrayList<>();
-        for(int i = 0; i < DEFAULT_MAX_ELEMENTS_IN_MEMORY; i++){
+        for(int i = 0; i < maxElementsInMemory; i++){
             cursor.moveToNext();
             users.add(getUser());
         }
 
         currentFirstPosition = 0;
-        currentLastPosition = DEFAULT_MAX_ELEMENTS_IN_MEMORY;
+        currentLastPosition = maxElementsInMemory;
         endDataBasePosition = cursor.getCount();
 
         UserAdapter adapter = new UserAdapter(users, this);
@@ -75,6 +89,14 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     protected void onDestroy() {
         super.onDestroy();
         cursor.close();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putInt(CURRENT_MAX_ELEMENTS, maxElementsInMemory);
+        editor.apply();
     }
 
     @Override
@@ -103,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
      * If scrolling up
      */
     private void loadNextUsers(){
-        int countNewUser = DEFAULT_MAX_ELEMENTS_IN_MEMORY / LOAD_FACTOR;
+        int countNewUser = maxElementsInMemory / LOAD_FACTOR;
         int i = 0;
         cursor.moveToPosition(currentLastPosition);
         while(cursor.moveToNext() && i < countNewUser){
@@ -123,12 +145,12 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
      * If scrolling down
      */
     private void loadPreviewsUsers(){
-        int countNewUser = DEFAULT_MAX_ELEMENTS_IN_MEMORY / LOAD_FACTOR;
+        int countNewUser = maxElementsInMemory / LOAD_FACTOR;
         int i = 0;
         cursor.moveToPosition(currentFirstPosition);
         while(cursor.moveToPrevious() && i < countNewUser){
             if(users.size() != 0){
-                users.remove(DEFAULT_MAX_ELEMENTS_IN_MEMORY - 1);
+                users.remove(maxElementsInMemory - 1);
             }
             users.add(0, getUser());
             currentFirstPosition--;
@@ -163,7 +185,7 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
                         String inputText = maxElementsInput.getText().toString();
                         if(!TextUtils.isEmpty(inputText)){
                             try{
-                                DEFAULT_MAX_ELEMENTS_IN_MEMORY = Integer.valueOf(inputText);
+                                maxElementsInMemory = Integer.valueOf(inputText);
                                 ((BaseAdapter) userListView.getAdapter()).notifyDataSetChanged();
                             } catch (NumberFormatException ex){
                                 Log.e("", ex.getMessage());
